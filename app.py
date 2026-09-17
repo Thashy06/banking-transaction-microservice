@@ -7,8 +7,8 @@ app = Flask(__name__)
 # 1. DATABASE LAYER (SQL + AUDIT LOG)
 # ==========================================
 def init_db():
-    """Initializes SQLite database, including the audit flags table."""
-    conn = sqlite3.connect("td_bank.db")
+    """Initializes SQLite database, including standard tables and the audit flags table."""
+    conn = sqlite3.connect("banking_system.db")
     cursor = conn.cursor()
     
     # Accounts table
@@ -31,7 +31,7 @@ def init_db():
         )
     ''')
     
-    # NEW: Automated Audit / Compliance Flags table ($10,000+ threshold)
+    # Automated Audit / Compliance Flags table ($10,000+ threshold)
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS audit_flags (
             flag_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -51,7 +51,7 @@ def init_db():
 # ==========================================
 class BankAccount:
     """Encapsulates account balance, transactional logic, and audit rules."""
-    LARGE_TRANSACTION_THRESHOLD = 10000.0  # Regulatory FINTRAC / AML threshold
+    LARGE_TRANSACTION_THRESHOLD = 10000.0  # Regulatory AML/FINTRAC threshold
 
     def __init__(self, account_id, owner_name, balance=0.0):
         self.account_id = account_id
@@ -63,7 +63,7 @@ class BankAccount:
             raise ValueError("Deposit amount must be positive.")
         self._balance += amount
         self._sync_db("DEPOSIT", amount)
-        self._run_audit_engine("DEPOSIT", amount)  # Run automated audit check
+        self._run_audit_engine("DEPOSIT", amount)
         return self._balance
 
     def withdraw(self, amount):
@@ -73,7 +73,7 @@ class BankAccount:
             raise ValueError("Insufficient funds. Overdraft prevented.")
         self._balance -= amount
         self._sync_db("WITHDRAWAL", amount)
-        self._run_audit_engine("WITHDRAWAL", amount)  # Run automated audit check
+        self._run_audit_engine("WITHDRAWAL", amount)
         return self._balance
 
     def get_balance(self):
@@ -81,7 +81,7 @@ class BankAccount:
 
     def _sync_db(self, trans_type, amount):
         """Persists standard state changes to SQLite."""
-        conn = sqlite3.connect("td_bank.db")
+        conn = sqlite3.connect("banking_system.db")
         cursor = conn.cursor()
         cursor.execute(
             "UPDATE accounts SET balance = ? WHERE account_id = ?",
@@ -97,7 +97,7 @@ class BankAccount:
     def _run_audit_engine(self, trans_type, amount):
         """AUTOMATED AUDIT ENGINE: Flags high-risk transfers >= $10,000."""
         if amount >= self.LARGE_TRANSACTION_THRESHOLD:
-            conn = sqlite3.connect("td_bank.db")
+            conn = sqlite3.connect("banking_system.db")
             cursor = conn.cursor()
             cursor.execute(
                 '''INSERT INTO audit_flags (account_id, trans_type, amount, flag_reason) 
@@ -114,7 +114,7 @@ class BankAccount:
 
 # Helper to fetch account from DB
 def load_account(account_id):
-    conn = sqlite3.connect("td_bank.db")
+    conn = sqlite3.connect("banking_system.db")
     cursor = conn.cursor()
     cursor.execute("SELECT account_id, owner_name, balance FROM accounts WHERE account_id = ?", (account_id,))
     row = cursor.fetchone()
@@ -134,7 +134,7 @@ def create_account():
     owner_name = data.get('owner_name')
     initial_balance = data.get('balance', 0.0)
 
-    conn = sqlite3.connect("td_bank.db")
+    conn = sqlite3.connect("banking_system.db")
     cursor = conn.cursor()
     try:
         cursor.execute(
@@ -209,11 +209,10 @@ def withdraw(account_id):
         return jsonify({"error": str(e)}), 400
 
 
-# NEW ENDPOINT: Audit dashboard endpoint to view flagged high-risk transactions
 @app.route('/audit/flags', methods=['GET'])
 def get_audit_flags():
     """GET Endpoint: Retrieves all flagged transfers exceeding regulatory thresholds."""
-    conn = sqlite3.connect("td_bank.db")
+    conn = sqlite3.connect("banking_system.db")
     cursor = conn.cursor()
     cursor.execute("SELECT flag_id, account_id, trans_type, amount, flag_reason, timestamp FROM audit_flags")
     rows = cursor.fetchall()

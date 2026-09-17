@@ -1,4 +1,4 @@
 .venv/
-td_bank.db
+banking_system.db
 __pycache__/
 *.pyc
