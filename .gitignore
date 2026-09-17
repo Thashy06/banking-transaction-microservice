@@ -1,0 +1,4 @@
+.venv/
+td_bank.db
+__pycache__/
+*.pyc
